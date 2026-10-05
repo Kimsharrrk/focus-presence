@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>몰입 트래커</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1: #fcfcfb;
+    --surface-2: #f4f3f0;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #807f7a;
+    --grid: #e4e3df;
+    --accent: #2a78d6;
+    --accent-soft: #b7d3f6;
+    --s0: #2a78d6; --s1: #eb6834; --s2: #1baf7a; --s3: #eda100;
+    --s4: #e87ba4; --s5: #008300; --s6: #4a3aa7; --s7: #e34948;
+    --other: #a9a8a2;
+    --live: #0ca30c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --surface-1: #1a1a19;
+      --surface-2: #232321;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted: #8f8e86;
+      --grid: #353533;
+      --accent: #3987e5;
+      --accent-soft: #184f95;
+      --s0: #3987e5; --s1: #d95926; --s2: #199e70; --s3: #c98500;
+      --s4: #d55181; --s5: #008300; --s6: #9085e9; --s7: #e66767;
+      --other: #6b6a64;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--surface-1); color: var(--text-primary);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif;
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; display: grid; gap: 16px; }
+  h1 { font-size: 18px; margin: 0; font-weight: 650; }
+  h2 { font-size: 14px; margin: 0 0 12px; font-weight: 650; color: var(--text-secondary); }
+  header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .card { background: var(--surface-2); border-radius: 12px; padding: 16px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .now { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 650; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text-muted); flex: none; }
+  .dot.live { background: var(--live); box-shadow: 0 0 0 4px color-mix(in srgb, var(--live) 25%, transparent); }
+  .sub { color: var(--text-secondary); font-size: 13px; margin-top: 2px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
+  .stat .v { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .stat .l { color: var(--text-secondary); font-size: 12px; }
+  .rank { display: grid; gap: 8px; }
+  .rank-row { display: grid; grid-template-columns: 110px 1fr 76px; gap: 8px; align-items: center; font-size: 13px; }
+  .rank-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rank-row .val { text-align: right; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .track { height: 12px; }
+  .bar { height: 12px; border-radius: 4px; min-width: 2px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; font-size: 12px; color: var(--text-secondary); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+  svg text { fill: var(--text-muted); font-size: 11px; }
+  .empty { color: var(--text-muted); font-size: 13px; padding: 8px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--grid); }
+  th { color: var(--text-secondary); font-weight: 600; }
+  td.num { font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+  label.row { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px; font-size: 13px; }
+  input[type=number] { width: 72px; padding: 4px 6px; border: 1px solid var(--grid); border-radius: 6px; background: var(--surface-1); color: inherit; font: inherit; }
+  button { margin-top: 12px; padding: 6px 14px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+  #tip { position: fixed; pointer-events: none; z-index: 10; background: var(--text-primary); color: var(--surface-1); padding: 4px 8px; border-radius: 6px; font-size: 12px; white-space: nowrap; opacity: 0; transition: opacity .08s; }
+  [data-tip] { cursor: default; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>몰입 트래커</h1>
+    <span class="sub" id="updated"></span>
+  </header>
+
+  <section class="card">
+    <div class="now"><span class="dot" id="dot"></span><span id="nowText">불러오는 중…</span></div>
+    <div class="sub" id="nowSub"></div>
+    <div class="stats">
+      <div class="stat"><div class="v" id="sTotal">–</div><div class="l">오늘 총 기록</div></div>
+      <div class="stat"><div class="v" id="sFocus">–</div><div class="l" id="sFocusL">몰입 앱</div></div>
+      <div class="stat"><div class="v" id="sStreak">–</div><div class="l">연속 달성</div></div>
+    </div>
+  </section>
+
+  <div class="grid">
+    <section class="card">
+      <h2>오늘 앱별 사용 시간</h2>
+      <div class="rank" id="rank"></div>
+    </section>
+    <section class="card">
+      <h2>최근 7일</h2>
+      <div id="week"></div>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>오늘 타임라인</h2>
+    <div id="timeline"></div>
+    <div class="legend" id="tlLegend"></div>
+  </section>
+
+  <section class="card">
+    <h2>설정</h2>
+    <div id="settings"><div class="empty">앱 기록이 쌓이면 여기서 몰입 앱과 제외 앱을 고를 수 있어요.</div></div>
+  </section>
+</main>
+<div id="tip"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmt = (sec) => {
+  sec = Math.max(0, Math.round(sec));
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+  if (h > 0) return `${h}시간 ${m}분`;
+  return m > 0 ? `${m}분` : `${sec}초`;
+};
+const fmtH = (sec) => (sec / 3600).toFixed(1).replace(/\.0$/, '') + 'h';
+const clock = (t) => new Date(t * 1000).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+const colorOf = (slots, app) => (slots[app] >= 0 && slots[app] != null ? `var(--s${slots[app]})` : 'var(--other)');
+const api = (p, opt) => fetch(p, opt).then((r) => r.json());
+
+// 툴팁
+const tip = $('tip');
+document.addEventListener('mousemove', (e) => {
+  const t = e.target.closest('[data-tip]');
+  if (!t) { tip.style.opacity = 0; return; }
+  tip.textContent = t.dataset.tip;
+  tip.style.opacity = 1;
+  tip.style.left = Math.min(e.clientX + 12, innerWidth - tip.offsetWidth - 8) + 'px';
+  tip.style.top = e.clientY + 14 + 'px';
+});
+
+function renderStatus(s) {
+  $('dot').className = 'dot' + (s.active ? ' live' : '');
+  if (s.active) {
+    $('nowText').textContent = `${s.app} 사용 중`;
+    $('nowSub').textContent = `${fmt(s.now - s.since)}째 · ${clock(s.since)}부터`;
+  } else {
+    $('nowText').textContent = '기록 중지';
+    $('nowSub').textContent = s.lastApp ? '잠금·절전 중이거나 제외된 앱이에요' : '아직 기록이 없어요. 수집기가 켜져 있는지 확인해 주세요.';
+  }
+  $('updated').textContent = new Date().toLocaleTimeString('ko-KR', { hour12: false }) + ' 갱신';
+}
+
+function renderToday(d, week) {
+  $('sTotal').textContent = fmt(d.totalSec);
+  if (week.streakOn) {
+    $('sFocus').textContent = `${fmt(d.focusSec)}`;
+    $('sFocusL').textContent = `몰입 앱 (목표 ${week.goalHours}시간)`;
+    $('sStreak').textContent = `${week.streak}일`;
+  } else {
+    $('sFocus').textContent = '–';
+    $('sFocusL').textContent = '몰입 앱 (설정에서 고르기)';
+    $('sStreak').textContent = '–';
+  }
+
+  const max = d.ranking[0]?.sec || 1;
+  $('rank').innerHTML = d.ranking.length
+    ? d.ranking.map((r) => {
+        const pct = Math.round((r.sec / (d.totalSec || 1)) * 100);
+        return `<div class="rank-row" data-tip="${esc(r.app)} · ${fmt(r.sec)} (${pct}%)">
+          <span class="name">${esc(r.app)}</span>
+          <span class="track"><div class="bar" style="width:${(r.sec / max) * 100}%;background:${colorOf(d.slots, r.app)}"></div></span>
+          <span class="val">${fmt(r.sec)}</span></div>`;
+      }).join('')
+    : '<div class="empty">오늘 기록이 아직 없어요.</div>';
+
+  // 타임라인: 0시~24시, 앱 세그먼트
+  const W = 1000, H = 64, bandY = 8, bandH = 36;
+  const x = (t) => ((t - d.from) / 86400) * W;
+  const segs = d.timeline.map((s) =>
+    `<rect x="${x(s.s).toFixed(1)}" y="${bandY}" width="${Math.max(0.8, x(s.e) - x(s.s)).toFixed(1)}" height="${bandH}" rx="2"
+      fill="${colorOf(d.slots, s.app)}" stroke="var(--surface-2)" stroke-width="1"
+      data-tip="${esc(s.app)} · ${clock(s.s)}–${clock(s.e)} (${fmt(s.e - s.s)})"/>`).join('');
+  const ticks = [0, 3, 6, 9, 12, 15, 18, 21, 24].map((h) =>
+    `<text x="${(h / 24) * W}" y="${H - 4}" text-anchor="${h === 0 ? 'start' : h === 24 ? 'end' : 'middle'}">${h}시</text>`).join('');
+  $('timeline').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="오늘 시간대별 사용 앱">
+    <rect x="0" y="${bandY}" width="${W}" height="${bandH}" rx="4" fill="var(--grid)" opacity=".45"/>
+    ${segs}
+    <line x1="${x(d.now)}" x2="${x(d.now)}" y1="${bandY - 4}" y2="${bandY + bandH + 4}" stroke="var(--text-primary)" stroke-width="1.5"/>
+    ${ticks}</svg>`;
+  const used = [...new Set(d.timeline.map((s) => s.app))];
+  const named = used.filter((a) => d.slots[a] >= 0 && d.slots[a] != null);
+  $('tlLegend').innerHTML = named.map((a) => `<span><i style="background:${colorOf(d.slots, a)}"></i>${esc(a)}</span>`).join('') +
+    (used.length > named.length ? '<span><i style="background:var(--other)"></i>기타</span>' : '');
+}
+
+function renderWeek(w) {
+  const W = 400, H = 170, base = 140, top = 24, barW = 34, gap = (W - 7 * barW) / 8;
+  const max = Math.max(3600, ...w.days.map((d) => d.totalSec));
+  const hgt = (sec) => (sec / max) * (base - top);
+  const goalY = w.streakOn ? base - hgt(w.goalHours * 3600) : null;
+  const bars = w.days.map((d, i) => {
+    const x = gap + i * (barW + gap);
+    const tH = hgt(d.totalSec), fH = hgt(d.focusSec);
+    const wd = new Date(d.day * 1000).toLocaleDateString('ko-KR', { weekday: 'short' });
+    const tip = `${new Date(d.day * 1000).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })} · 총 ${fmt(d.totalSec)}` + (w.streakOn ? ` · 몰입 ${fmt(d.focusSec)}` : '');
+    const restH = Math.max(0, tH - fH - 2);
+    return `<g data-tip="${esc(tip)}">
+      <rect x="${x}" y="${top - 4}" width="${barW}" height="${base - top + 4}" fill="transparent"/>
+      ${restH > 0 ? `<rect x="${x}" y="${base - fH - 2 - restH}" width="${barW}" height="${restH}" rx="4" fill="var(--accent-soft)"/>` : ''}
+      ${fH > 0 ? `<rect x="${x}" y="${base - fH}" width="${barW}" height="${fH}" rx="4" fill="var(--accent)"/>` : ''}
+      <text x="${x + barW / 2}" y="${base - tH - 6}" text-anchor="middle">${d.totalSec ? fmtH(d.totalSec) : ''}</text>
+      <text x="${x + barW / 2}" y="${base + 16}" text-anchor="middle">${wd}</text></g>`;
+  }).join('');
+  const goal = goalY != null ? `<line x1="0" x2="${W}" y1="${goalY}" y2="${goalY}" stroke="var(--text-muted)" stroke-dasharray="4 4"/><text x="${W}" y="${goalY - 4}" text-anchor="end">목표 ${w.goalHours}h</text>` : '';
+  $('week').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="최근 7일 일별 기록 시간">
+    <line x1="0" x2="${W}" y1="${base}" y2="${base}" stroke="var(--grid)"/>${goal}${bars}</svg>
+    <div class="legend"><span><i style="background:var(--accent)"></i>몰입 앱</span><span><i style="background:var(--accent-soft)"></i>그 외</span></div>`;
+}
+
+let config = null;
+function renderSettings(c) {
+  config = c;
+  if (!c.knownApps.length) return;
+  const rows = c.knownApps.map((a, i) => `<tr>
+    <td>${esc(a.app)}</td><td class="num">${fmt(a.sec)}</td>
+    <td><input type="checkbox" data-kind="focus" data-i="${i}" ${c.focusApps.includes(a.app) ? 'checked' : ''}></td>
+    <td><input type="checkbox" data-kind="excl" data-i="${i}" ${c.excludedApps.includes(a.app) ? 'checked' : ''}></td></tr>`).join('');
+  $('settings').innerHTML = `<table><thead><tr><th>앱</th><th>누적</th><th>몰입 앱</th><th>제외</th></tr></thead><tbody>${rows}</tbody></table>
+    <label class="row">하루 목표 <input type="number" id="goal" min="0" max="24" step="0.5" value="${c.goalHours}"> 시간 (몰입 앱 합계 기준 스트릭)</label>
+    <div class="sub">제외한 앱은 이후부터 기록하지 않아요. 이미 쌓인 기록은 그대로 남습니다.</div>
+    <button id="save">저장</button> <span class="sub" id="saved"></span>`;
+  $('save').onclick = async () => {
+    const known = new Set(c.knownApps.map((a) => a.app));
+    const pick = (kind) => c.knownApps.filter((a, i) => document.querySelector(`[data-kind=${kind}][data-i="${i}"]`).checked).map((a) => a.app);
+    const body = {
+      focusApps: [...c.focusApps.filter((a) => !known.has(a)), ...pick('focus')],
+      excludedApps: [...c.excludedApps.filter((a) => !known.has(a)), ...pick('excl')],
+      goalHours: Number($('goal').value),
+    };
+    const next = await api('/api/config', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    config = next;
+    $('saved').textContent = '저장됨';
+    refresh();
+  };
+}
+
+async function refresh() {
+  try {
+    const [s, t, w] = await Promise.all([api('/api/status'), api('/api/today'), api('/api/week')]);
+    renderStatus(s); renderToday(t, w); renderWeek(w);
+  } catch {
+    $('nowText').textContent = '서버에 연결할 수 없어요';
+  }
+}
+
+refresh();
+api('/api/config').then(renderSettings);
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
